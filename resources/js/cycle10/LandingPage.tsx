@@ -507,6 +507,10 @@ export default function LandingPage() {
       return;
     }
 
+    if (!video.getAttribute('src')) {
+      video.src = 'https://demo-fullbright.b-cdn.net/NEW.mp4';
+    }
+
     video.currentTime = 0;
     void video.play();
   }, []);
@@ -999,9 +1003,10 @@ export default function LandingPage() {
       <video
         ref={lmsVideoRef}
         controls
-        preload="metadata"
+        preload="none"
         playsInline
-        src="https://demo-fullbright.b-cdn.net/NEW.mp4#t=0.001"
+        {...LAZY_POSTER}
+        poster="/assets/lms-showcase-poster.webp"
         onPlay={handleLmsVideoPlay}
         className="[display:block] [width:100%] [aspect-ratio:16/9] [object-fit:cover] [background:#151515]"
       >
