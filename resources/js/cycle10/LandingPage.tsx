@@ -60,12 +60,12 @@ const reviewSrc = (i: number): string => `/assets/Riview (${i + 1}).webp`;
 const TRACKED_HASH_DESTINATIONS = new Set(['#pricing', '#testimonials']);
 
 function ctaZone(location: string): CtaZone {
-  if (location.startsWith('pricing_')) return 'pricing';
-  if (location.startsWith('hero_')) return 'hero';
-  if (location.startsWith('navbar') || location.startsWith('nav_')) return 'nav';
-  if (location.startsWith('footer_')) return 'footer';
-  if (location.startsWith('faq_')) return 'faq';
-  if (location.startsWith('floating_') || location === 'whatsapp_bubble') return 'floating';
+  if (location.startsWith('pricing_') || location.includes('pricing')) return 'pricing';
+  if (location.startsWith('hero_') || location.includes('hero')) return 'hero';
+  if (location.startsWith('navbar') || location.startsWith('nav_') || location.includes('navbar') || location.includes('nav')) return 'nav';
+  if (location.startsWith('footer_') || location.includes('footer')) return 'footer';
+  if (location.startsWith('faq_') || location.includes('faq')) return 'faq';
+  if (location.startsWith('floating_') || location === 'whatsapp_bubble' || location.includes('floating') || location.includes('return_popup') || location.includes('popup')) return 'floating';
   return 'midpage';
 }
 
@@ -335,7 +335,8 @@ export default function LandingPage() {
     void track(eventType, { ...details, zone, action, cta_label: label });
   }, [track, tracking.mode]);
   const trackInteraction = useCallback((section: string, answer: string) => {
-    void track('intent', { section, zone: 'midpage', action: 'link', cta_label: answer, answer });
+    const zone: CtaZone = section.includes('return_popup') ? 'floating' : 'midpage';
+    void track('intent', { section, zone, action: 'link', cta_label: answer, answer });
   }, [track]);
   const trackVideoPlay = useCallback((section: string) => {
     void track('intent', { section, interaction_kind: 'video_play' });
@@ -473,13 +474,25 @@ export default function LandingPage() {
   const selectSurvey = useCallback((index: number, answer: string): void => {
     setSurveySelected(index);
     trackInteraction('difficulty_survey', answer);
-  }, [trackInteraction]);
+    trackCTA([
+      'difficulty_survey_bingung_mulai_belajar',
+      'difficulty_survey_skor_masih_stuck',
+      'difficulty_survey_ragu_ikut_kursus',
+      'difficulty_survey_lainnya',
+    ][index], answer, 'difficulty_survey');
+  }, [trackCTA, trackInteraction]);
   const selectReturnSurvey = useCallback((index: number): void => {
     const answer = RETURN_OPTIONS[index];
-    if (!answer || !RETURN_CTA_LOCATIONS[index]) return;
+    const location = RETURN_CTA_LOCATIONS[index];
+
+    if (!answer || !location) {
+      return;
+    }
+
     setRpSelected(index);
     trackInteraction('return_popup_survey', answer);
-  }, [trackInteraction]);
+    trackCTA(location, answer, 'return_popup_survey');
+  }, [trackCTA, trackInteraction]);
   const closeReturnPopup = useCallback((): void => setRpOpen(false), []);
   const toggleCat = useCallback((i: number): void => setActiveCat((cur) => (cur === FAQ_CATEGORIES[i] ? null : FAQ_CATEGORIES[i])), []);
   const handleTestimonialVideoPlay = useCallback((): void => {

@@ -97,7 +97,7 @@ function ctaZone(location: string): CtaZone {
   if (location.startsWith('navbar') || location.startsWith('nav_') || location.includes('navbar') || location.includes('nav')) return 'nav';
   if (location.startsWith('footer_') || location.includes('footer')) return 'footer';
   if (location.startsWith('faq_') || location.includes('faq')) return 'faq';
-  if (location.startsWith('floating_') || location === 'whatsapp_bubble' || location.includes('floating')) return 'floating';
+  if (location.startsWith('floating_') || location === 'whatsapp_bubble' || location.includes('floating') || location.includes('return_popup') || location.includes('popup')) return 'floating';
   return 'midpage';
 }
 
@@ -422,7 +422,8 @@ export default function LandingPage() {
   }, [track, tracking.mode]);
 
   const trackInteraction = useCallback((section: string, answer: string) => {
-    void track('intent', { section, zone: 'midpage', action: 'link', cta_label: answer, answer });
+    const zone: CtaZone = section.includes('return_popup') ? 'floating' : 'midpage';
+    void track('intent', { section, zone, action: 'link', cta_label: answer, answer });
   }, [track]);
 
   const trackVideoPlay = useCallback((section: string) => {

@@ -78,3 +78,53 @@ test('visits and conversions from all landing page routes appear in admin analyt
     '/c12-price',
     '/c10-lp',
 ]);
+
+test('survey clicks in return popup and difficulty survey appear in micro conversion attribution ctas', function () {
+    config()->set('analytics.mode', 'ctwa');
+    config()->set('analytics.enabled', true);
+
+    $landingSource = '/';
+
+    // 1. Difficulty survey click (midpage zone, link action)
+    $this->postJson('/analytics/track', [
+        'event_type' => 'intent',
+        'event_data' => [
+            'landing_source' => $landingSource,
+            'event_id' => 'survey-diff-1',
+            'zone' => 'midpage',
+            'action' => 'link',
+            'cta_label' => 'Bingung mulai belajar dari mana',
+            'location' => 'difficulty_survey_bingung_mulai_belajar',
+            'destination' => 'difficulty_survey',
+        ],
+    ])->assertCreated();
+
+    // 2. Return popup survey click (floating zone, link action)
+    $this->postJson('/analytics/track', [
+        'event_type' => 'intent',
+        'event_data' => [
+            'landing_source' => $landingSource,
+            'event_id' => 'survey-return-1',
+            'zone' => 'floating',
+            'action' => 'link',
+            'cta_label' => 'Harganya masih terlalu mahal buatku',
+            'location' => 'return_popup_harga_terlalu_mahal',
+            'destination' => 'return_popup_survey',
+        ],
+    ])->assertCreated();
+
+    $from = CarbonImmutable::now()->startOfDay();
+    $to = CarbonImmutable::now()->endOfDay();
+
+    $labs = app(AbTestingService::class)->report($from, $to);
+    $ctas = collect($labs['ctas']);
+
+    $floatingLink = $ctas->firstWhere(fn ($row) => $row['zone'] === 'floating' && $row['action'] === 'link');
+    $midpageLink = $ctas->firstWhere(fn ($row) => $row['zone'] === 'midpage' && $row['action'] === 'link');
+
+    expect($floatingLink)->not->toBeNull()
+        ->and($floatingLink['clicks'])->toBeGreaterThanOrEqual(1)
+        ->and($midpageLink)->not->toBeNull()
+        ->and($midpageLink['clicks'])->toBeGreaterThanOrEqual(1);
+});
+
