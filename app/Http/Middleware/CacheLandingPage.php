@@ -17,7 +17,7 @@ class CacheLandingPage
 
     public function handle(Request $request, Closure $next): Response
     {
-        $isLandingPage = $request->routeIs('home', 'demo.*');
+        $isLandingPage = $request->routeIs('home', 'cycle12.price', 'toefl-hack', 'bio-ig-toefl-hack', 'cycle10.landing', 'demo.*');
 
         if (! $request->isMethod('GET') || $request->user() || ! $isLandingPage) {
             return $next($request);

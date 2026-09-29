@@ -396,12 +396,16 @@ class AbTestingService
 
     private function sessionRows(CarbonImmutable $from, CarbonImmutable $to, ?string $referralSource): Collection
     {
-        $query = DB::table('analytics_sessions')->whereBetween('started_at', [$from, $to]);
+        $query = DB::table('user_analytics as visits')
+            ->join('analytics_sessions as sessions', 'sessions.session_id', '=', 'visits.session_id')
+            ->where('visits.event_type', EventType::Visit->value)
+            ->whereBetween('visits.created_at', [$from, $to]);
         if ($referralSource) {
-            $query->where('referral_source', $referralSource);
+            $query->where('sessions.referral_source', $referralSource);
         }
 
-        return $query->selectRaw("COALESCE(NULLIF(landing_source, ''), '/') AS landing_source, session_id, COALESCE(device_type, 'unknown') AS device_type, duration_seconds, max_scroll_depth, is_bounce")
+        return $query->selectRaw("COALESCE(NULLIF(visits.landing_source, ''), '/') AS landing_source, sessions.session_id, COALESCE(sessions.device_type, 'unknown') AS device_type, sessions.duration_seconds, sessions.max_scroll_depth, sessions.is_bounce")
+            ->distinct()
             ->get();
     }
 

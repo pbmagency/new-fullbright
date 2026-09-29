@@ -18,6 +18,21 @@ export function landingSource(): string {
         return '/';
     }
 
+    // Each landing page is a separate A/B Labs variant, including when a
+    // visitor opens another variant in the same browser tab.
+    const landingPages = new Set([
+        '/',
+        '/toefl-hack',
+        '/bio-ig-toefl-hack',
+        '/c10-lp',
+        '/c12-price',
+    ]);
+    const path = window.location.pathname;
+
+    if (landingPages.has(path)) {
+        return path;
+    }
+
     const key = 'pbm_landing_source';
     const existing = window.sessionStorage.getItem(key);
 

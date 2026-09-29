@@ -1,7 +1,5 @@
 import { createInertiaApp } from '@inertiajs/react';
-import { lazy, Suspense } from 'react';
-import { Toaster } from '@/components/ui/sonner';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { lazy } from 'react';
 import { initializeTheme } from '@/hooks/use-appearance';
 import TrackingLayout from '@/layouts/tracking-layout';
 
@@ -19,18 +17,8 @@ createInertiaApp({
                 return TrackingLayout;
         }
     },
-    strictMode: true,
-    withApp(app) {
-        return (
-            <TooltipProvider delayDuration={0}>
-                {/* Suspense is required when using lazy() layout imports */}
-                <Suspense fallback={null}>{app}</Suspense>
-                <Toaster />
-            </TooltipProvider>
-        );
-    },
     progress: {
-        color: '#4B5563',
+        color: '#D70808',
     },
 });
 

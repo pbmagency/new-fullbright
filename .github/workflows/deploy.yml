@@ -1,62 +1,283 @@
-name: Test and deploy
+name: Deploy Laravel to Staging
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+
+    env:
+      SERVER_IP: '72.61.142.238'
+      SERVER_USER: 'root'
+
+      DOMAIN_USERNAME: 'toefl6071'
+      DOMAIN_GROUP: 'nobody'
+
+      TARGET_DIR_LARAVEL: '/home/toefl.fullbrightindonesia.org/laravel-staging'
+      TARGET_DIR_PUBLIC: '/home/toefl.fullbrightindonesia.org/staging'
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      # ---------------------------------------------------------
+      # CHECKOUT
+      # ---------------------------------------------------------
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # ---------------------------------------------------------
+      # PHP & COMPOSER DI GITHUB RUNNER
+      # ---------------------------------------------------------
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: mbstring, bcmath, intl, pdo_mysql
           coverage: none
-      - uses: actions/setup-node@v4
+
+      - name: Install Composer Dependencies on Runner
+        run: |
+          composer install \
+            --no-dev \
+            --optimize-autoloader \
+            --no-interaction \
+            --no-scripts
+
+      # ---------------------------------------------------------
+      # NODE & VITE BUILD
+      # ---------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '22.14'
           cache: npm
-      - run: composer install --no-interaction --prefer-dist
-      - run: npm ci
-      - run: cp .env.example .env && php artisan key:generate
-      - run: composer validate --strict
-      - run: composer ci:check
-      - run: npm run build
-      - run: tar --exclude=.git --exclude=.env --exclude=node_modules --exclude=vendor --exclude=storage/logs -czf release.tar.gz .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release
-          path: release.tar.gz
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/download-artifact@v4
+      - name: Install NPM and Build Inertia React
+        run: |
+          npm install
+          npm run build
+
+      # ---------------------------------------------------------
+      # SSH
+      # ---------------------------------------------------------
+      - name: Setup SSH Key
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          name: release
-      - uses: appleboy/scp-action@v1
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add Server to Known Hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          for attempt in 1 2 3; do
+            keyscan_error_file="$(mktemp)"
+
+            if ssh-keyscan -T 30 -H "${{ env.SERVER_IP }}" \
+              >> ~/.ssh/known_hosts \
+              2>"$keyscan_error_file"; then
+
+              rm -f "$keyscan_error_file"
+              break
+            fi
+
+            echo "ssh-keyscan attempt $attempt failed:"
+            cat "$keyscan_error_file"
+            rm -f "$keyscan_error_file"
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to fetch SSH host key after 3 attempts."
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          chmod 600 ~/.ssh/known_hosts
+
+      # ---------------------------------------------------------
+      # PERSIAPAN DIREKTORI SERVER
+      # ---------------------------------------------------------
+      - name: Prepare Server Directories
+        run: |
+          ssh "${{ env.SERVER_USER }}@${{ env.SERVER_IP }}" "
+            set -e
+
+            [ '${{ env.TARGET_DIR_LARAVEL }}' = '/home/toefl.fullbrightindonesia.org/laravel-staging' ]
+            [ '${{ env.TARGET_DIR_PUBLIC }}' = '/home/toefl.fullbrightindonesia.org/staging' ]
+            [ ! -L '${{ env.TARGET_DIR_LARAVEL }}' ]
+            [ ! -L '${{ env.TARGET_DIR_PUBLIC }}' ]
+
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}'
+            mkdir -p '${{ env.TARGET_DIR_PUBLIC }}'
+
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/storage/app/public'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/storage/framework/cache/data'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/storage/framework/sessions'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/storage/framework/views'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/storage/logs'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/bootstrap/cache'
+            mkdir -p '${{ env.TARGET_DIR_LARAVEL }}/public/build'
+          "
+
+      # ---------------------------------------------------------
+      # SYNC 1: CORE LARAVEL
+      # ---------------------------------------------------------
+      - name: Sync Laravel Core
+        run: |
+          rsync -avz --delete \
+            --exclude='.env' \
+            --exclude='/storage/' \
+            --exclude='/bootstrap/cache/' \
+            --exclude='/.git/' \
+            --exclude='/node_modules/' \
+            --exclude='/public/' \
+            --exclude='/vendor/' \
+            ./ \
+            "${{ env.SERVER_USER }}@${{ env.SERVER_IP }}:${{ env.TARGET_DIR_LARAVEL }}/"
+
+      # ---------------------------------------------------------
+      # SYNC 2: PUBLIC ASSETS
+      # ---------------------------------------------------------
+      - name: Sync Public Assets
+        run: |
+          rsync -avz --delete \
+            --exclude='/index.php' \
+            --exclude='/.well-known/' \
+            ./public/ \
+            "${{ env.SERVER_USER }}@${{ env.SERVER_IP }}:${{ env.TARGET_DIR_PUBLIC }}/"
+
+      # ---------------------------------------------------------
+      # SYNC 3: STORAGE PUBLIC
+      # ---------------------------------------------------------
+      - name: Sync Storage Public Assets
+        run: |
+          rsync -avz \
+            ./storage/app/public/ \
+            "${{ env.SERVER_USER }}@${{ env.SERVER_IP }}:${{ env.TARGET_DIR_LARAVEL }}/storage/app/public/"
+
+      # ---------------------------------------------------------
+      # POST DEPLOYMENT
+      # ---------------------------------------------------------
+      - name: Complete Laravel Deployment
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ secrets.VPS_PORT }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: release.tar.gz
-          target: /tmp/pbm-lp-deploy
-      - uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          port: ${{ secrets.VPS_PORT }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: ${{ env.SERVER_IP }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd "${{ secrets.VPS_PROJECT_PATH }}"
-            php artisan down || true
-            tar -xzf /tmp/pbm-lp-deploy/release.tar.gz
-            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+            set -e
+
+            LARAVEL_DIR="${{ env.TARGET_DIR_LARAVEL }}"
+            PUBLIC_DIR="${{ env.TARGET_DIR_PUBLIC }}"
+            SITE_USER="${{ env.DOMAIN_USERNAME }}"
+            SITE_GROUP="${{ env.DOMAIN_GROUP }}"
+
+            echo "Starting deployment..."
+
+            # Pastikan .env sudah dibuat manual di server
+            if [ ! -f "$LARAVEL_DIR/.env" ]; then
+              echo "ERROR: File .env belum ada di $LARAVEL_DIR/.env"
+              echo "Buat file .env terlebih dahulu sebelum deployment."
+              exit 1
+            fi
+
+            # Jangan jalankan migration apabila .env masih menunjuk ke situs utama.
+            APP_URL_VALUE="$(sed -n 's/^APP_URL=//p' "$LARAVEL_DIR/.env" | tail -n 1 | tr -d '"')"
+            case "$APP_URL_VALUE" in
+              'https://staging.toefl.fullbrightindonesia.org'|'http://staging.toefl.fullbrightindonesia.org') ;;
+              *)
+                echo "ERROR: APP_URL di staging harus mengarah ke staging.toefl.fullbrightindonesia.org."
+                exit 1
+                ;;
+            esac
+
+            # Install PHP dependencies langsung di server
+            cd "$LARAVEL_DIR"
+
+            composer install \
+              --no-dev \
+              --optimize-autoloader \
+              --no-interaction
+
+            # Buat index.php khusus split structure.
+            # staging dan laravel-staging berada dalam folder domain yang sama.
+            printf '%s\n' \
+              '<?php' \
+              '' \
+              'use Illuminate\Foundation\Application;' \
+              'use Illuminate\Http\Request;' \
+              '' \
+              'define("LARAVEL_START", microtime(true));' \
+              '' \
+              'if (file_exists($maintenance = __DIR__."/../laravel-staging/storage/framework/maintenance.php")) {' \
+              '    require $maintenance;' \
+              '}' \
+              '' \
+              'require __DIR__."/../laravel-staging/vendor/autoload.php";' \
+              '' \
+              '/** @var Application $app */' \
+              '$app = require_once __DIR__."/../laravel-staging/bootstrap/app.php";' \
+              '' \
+              '$app->handleRequest(Request::capture());' \
+              > "$PUBLIC_DIR/index.php"
+
+            # Laravel tetap mencari manifest dari core/public/build.
+            mkdir -p "$LARAVEL_DIR/public/build"
+
+            if [ ! -f "$PUBLIC_DIR/build/manifest.json" ]; then
+              echo "ERROR: Vite manifest tidak ditemukan."
+              echo "Expected: $PUBLIC_DIR/build/manifest.json"
+              exit 1
+            fi
+
+            cp \
+              "$PUBLIC_DIR/build/manifest.json" \
+              "$LARAVEL_DIR/public/build/manifest.json"
+
+            # Buat symlink public/storage secara aman
+            if [ -L "$PUBLIC_DIR/storage" ]; then
+              rm "$PUBLIC_DIR/storage"
+            elif [ -e "$PUBLIC_DIR/storage" ]; then
+              echo "ERROR: $PUBLIC_DIR/storage sudah ada dan bukan symlink."
+              echo "Periksa folder tersebut secara manual."
+              exit 1
+            fi
+
+            ln -s \
+              "$LARAVEL_DIR/storage/app/public" \
+              "$PUBLIC_DIR/storage"
+
+            # Bersihkan cache lama
+            php artisan optimize:clear
+
+            # Jalankan migration
             php artisan migrate --force
-            php artisan optimize
-            php artisan up
+
+            # Buat cache production
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            # Ownership CyberPanel
+            chown -R "$SITE_USER:$SITE_GROUP" "$LARAVEL_DIR"
+            chown -R "$SITE_USER:$SITE_GROUP" "$PUBLIC_DIR"
+
+            # Permission folder Laravel yang perlu writable
+            find "$LARAVEL_DIR/storage" \
+              -type d -exec chmod 775 {} \;
+
+            find "$LARAVEL_DIR/storage" \
+              -type f -exec chmod 664 {} \;
+
+            find "$LARAVEL_DIR/bootstrap/cache" \
+              -type d -exec chmod 775 {} \;
+
+            find "$LARAVEL_DIR/bootstrap/cache" \
+              -type f -exec chmod 664 {} \;
+
+            chmod 644 "$PUBLIC_DIR/index.php"
+
+            echo "Deployment completed successfully."

@@ -2,12 +2,14 @@
 
 use Inertia\Testing\AssertableInertia as Assert;
 
-test('root renders the demo for the configured project mode', function () {
-    config()->set('analytics.mode', 'ctwa');
-    $this->get('/')->assertInertia(fn (Assert $page) => $page
-        ->component('demo/ctwa')
-        ->where('tracking.pageUrl', '/'));
+test('root and alias routes render cycle12 landing page', function (string $url) {
+    $this->get($url)->assertOk()->assertInertia(fn (Assert $page) => $page
+        ->component('cycle12/LandingPage')
+        ->where('tracking.enabled', true));
+})->with([
+    '/',
+    '/toefl-hack',
+    '/bio-ig-toefl-hack',
+    '/c12-price',
+]);
 
-    config()->set('analytics.mode', 'form');
-    $this->get('/')->assertInertia(fn (Assert $page) => $page->component('demo/form')->where('paymentMode', 'internal'));
-});

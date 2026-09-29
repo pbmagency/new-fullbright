@@ -27,7 +27,6 @@ return Application::configure(basePath: dirname(__DIR__))
             CacheLandingPage::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
-            AddLinkHeadersForPreloadedAssets::class,
         ]);
 
         $middleware->alias([

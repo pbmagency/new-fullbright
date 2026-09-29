@@ -10,21 +10,12 @@ use App\Http\Controllers\PaymentCallbackController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    $mode = (string) config('analytics.mode');
-    $number = preg_replace('/\D+/', '', (string) config('analytics.whatsapp_number'));
-    $whatsappUrl = $number ? 'https://wa.me/'.$number.'?text='.urlencode((string) config('analytics.whatsapp_default_message')) : '#pricing';
+Route::inertia('/', 'cycle12/LandingPage')->name('home');
+Route::inertia('/toefl-hack', 'cycle12/LandingPage')->name('toefl-hack');
+Route::inertia('/bio-ig-toefl-hack', 'cycle12/LandingPage')->name('bio-ig-toefl-hack');
+Route::inertia('/c10-lp', 'cycle10/LandingPage')->name('cycle10.landing');
+Route::inertia('/c12-price', 'cycle12/LandingPage')->name('cycle12.price');
 
-    return Inertia::render("demo/{$mode}", [
-        'whatsappUrl' => $whatsappUrl,
-        'externalCheckoutUrl' => config('analytics.external_checkout_url'),
-        'paymentMode' => config('analytics.payment_mode'),
-        'productName' => config('analytics.product_name'),
-        'productPrice' => config('analytics.product_price'),
-    ]);
-})->name('home');
-
-Route::inertia('/c1-lp', 'c1-lp')->name('c1-lp');
 
 Route::middleware('throttle:120,1')->group(function () {
     Route::post('/analytics/track', [AnalyticsController::class, 'track'])->name('analytics.track');
