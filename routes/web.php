@@ -24,6 +24,8 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+Route::inertia('/c1-lp', 'c1-lp')->name('c1-lp');
+
 Route::middleware('throttle:120,1')->group(function () {
     Route::post('/analytics/track', [AnalyticsController::class, 'track'])->name('analytics.track');
     Route::post('/analytics/heartbeat', HeartbeatController::class)->name('analytics.heartbeat');
