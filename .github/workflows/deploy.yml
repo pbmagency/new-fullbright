@@ -185,15 +185,14 @@ jobs:
               exit 1
             fi
 
-            # Jangan jalankan migration apabila .env masih menunjuk ke situs utama.
-            APP_URL_VALUE="$(sed -n 's/^APP_URL=//p' "$LARAVEL_DIR/.env" | tail -n 1 | tr -d '"'\''\r' | xargs)"
-            case "$APP_URL_VALUE" in
-              'https://staging.toefl.fullbrightindonesia.org'|'http://staging.toefl.fullbrightindonesia.org') ;;
-              *)
-                echo "ERROR: APP_URL di staging harus mengarah ke staging.toefl.fullbrightindonesia.org."
-                exit 1
-                ;;
-            esac
+            APP_URL_VALUE="$(grep -i '^APP_URL' "$LARAVEL_DIR/.env" | tail -n 1 | cut -d '=' -f 2- | tr -d '"'\''\r ')"
+            if [[ "$APP_URL_VALUE" == *"staging.toefl.fullbrightindonesia.org"* ]]; then
+              echo "APP_URL verified: $APP_URL_VALUE"
+            else
+              echo "ERROR: APP_URL di staging harus mengarah ke staging.toefl.fullbrightindonesia.org."
+              echo "Dibaca dari .env: APP_URL_VALUE='$APP_URL_VALUE'"
+              exit 1
+            fi
 
             # Install PHP dependencies langsung di server
             cd "$LARAVEL_DIR"
