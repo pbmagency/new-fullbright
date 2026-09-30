@@ -24,7 +24,8 @@ class CacheLandingPage
         }
 
         $pathKey = str_replace('/', '_', $request->path());
-        $cacheKey = 'landing_page_html_'.config('analytics.mode')."_{$pathKey}:".self::manifestVersion();
+        $jakartaDate = now('Asia/Jakarta')->toDateString();
+        $cacheKey = 'landing_page_html_'.config('analytics.mode')."_{$pathKey}:{$jakartaDate}:".self::manifestVersion();
 
         if (Cache::has($cacheKey)) {
             /** @var string $html */

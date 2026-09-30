@@ -1,5 +1,6 @@
 @import 'tailwindcss' source(none);
 
 @source '../js/cycle10/LandingPage.tsx';
+@source '../js/components/flash-sale-banner-text.tsx';
 
 @custom-variant dark (&:is(.dark *));
